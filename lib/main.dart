@@ -11,7 +11,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(title: Text('Moving Arrow Widget')),
-        body: Center(child: MovingArrowWidget()),
+        body: MovingArrowWidget(),
       ),
     );
   }
@@ -34,12 +34,26 @@ class _MovingArrowWidgetState extends State<MovingArrowWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onPanUpdate: _onPanUpdate,
-      child: CustomPaint(
-        size: Size(300, 300),
-        painter: ArrowPainter(_angle),
-      ),
+    return Stack(
+      children: [
+        Positioned(
+          top: 20,
+          left: 20,
+          child: Text(
+            'Angle: ${(_angle * 180 / pi).toStringAsFixed(2)}°',
+            style: TextStyle(fontSize: 18),
+          ),
+        ),
+        GestureDetector(
+          onPanUpdate: _onPanUpdate,
+          child: Center(
+            child: CustomPaint(
+              size: Size(300, 300),
+              painter: ArrowPainter(_angle),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -55,43 +69,36 @@ class ArrowPainter extends CustomPainter {
       ..color = Colors.red
       ..style = PaintingStyle.fill;
 
-    final double arrowSize = 20.0;
+    final double arrowSize = 40.0;
     final Offset center = Offset(size.width / 2, size.height / 2);
     final double radius = size.width / 2 - arrowSize;
 
-    // Calculate the new angle based on 15 degree steps (15 degrees = pi/12 radians)
-    final double adjustedAngle = (angle / (pi / 12)).round() * (pi / 12);
+    // Calculate the new angle based on 45 degree steps (45 degrees = pi/4 radians)
+    final double adjustedAngle = (angle / (pi / 4)).round() * (pi / 4);
 
     final Offset arrowPosition = Offset(
       center.dx + radius * cos(adjustedAngle),
       center.dy + radius * sin(adjustedAngle),
     );
 
-    // Draw the arrow
+    // Draw the arrow with the desired shape
     drawArrow(canvas, paint, arrowPosition, arrowSize, adjustedAngle);
-
-    // Draw the center image
-    final centerImage = AssetImage('assets/images/motorcycle.png');
-    centerImage.resolve(ImageConfiguration()).addListener(
-      ImageStreamListener((ImageInfo info, bool _) {
-        final imageSize = Size(info.image.width.toDouble(), info.image.height.toDouble());
-        final Rect src = Offset.zero & imageSize;
-        final Rect dst = Rect.fromCenter(center: center, width: 60, height: 60);
-        canvas.drawImageRect(info.image, src, dst, Paint());
-      }),
-    );
   }
 
   void drawArrow(Canvas canvas, Paint paint, Offset position, double size, double angle) {
     final Path path = Path();
     path.moveTo(position.dx, position.dy);
-    path.lineTo(position.dx - size, position.dy - size / 2);
-    path.lineTo(position.dx - size, position.dy + size / 2);
+    path.lineTo(position.dx + size / 2, position.dy - size / 2);
+    path.lineTo(position.dx + size / 2, position.dy - size / 4);
+    path.lineTo(position.dx + size, position.dy - size / 4);
+    path.lineTo(position.dx + size, position.dy + size / 4);
+    path.lineTo(position.dx + size / 2, position.dy + size / 4);
+    path.lineTo(position.dx + size / 2, position.dy + size / 2);
     path.close();
 
     canvas.save();
     canvas.translate(position.dx, position.dy);
-    canvas.rotate(angle);
+    canvas.rotate(angle + pi); // Rotate the arrow to point inward
     canvas.translate(-position.dx, -position.dy);
     canvas.drawPath(path, paint);
     canvas.restore();
