@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'dart:math';
+import 'dart:ui' as ui;
+import 'package:flutter/services.dart';
 
 void main() {
   runApp(MyApp());
@@ -24,10 +28,36 @@ class MovingArrowWidget extends StatefulWidget {
 
 class _MovingArrowWidgetState extends State<MovingArrowWidget> {
   double _angle = 0.0;
+  ui.Image? _arrowImage;
+  ui.Image? _centerImage;
+  bool _imagesLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadImages();
+  }
+
+  Future<void> _loadImages() async {
+    _arrowImage = await _loadImage('assets/images/arrow.png');
+    _centerImage = await _loadImage('assets/images/motorcycle.png');
+    setState(() {
+      _imagesLoaded = true;
+    });
+  }
+
+  Future<ui.Image> _loadImage(String assetPath) async {
+    final ByteData data = await rootBundle.load(assetPath);
+    final Completer<ui.Image> completer = Completer();
+    ui.decodeImageFromList(data.buffer.asUint8List(), (image) {
+      completer.complete(image);
+    });
+    return completer.future;
+  }
 
   void _onPanUpdate(DragUpdateDetails details) {
     setState(() {
-      _angle += details.delta.dx * 0.01; // Adjust the sensitivity of the sliding
+      _angle += details.delta.dx * 0.02; // Adjust the sensitivity of the sliding
       _angle %= 2 * pi; // Keep the angle within 0 to 2*PI
     });
   }
@@ -49,7 +79,7 @@ class _MovingArrowWidgetState extends State<MovingArrowWidget> {
           child: Center(
             child: CustomPaint(
               size: Size(300, 300),
-              painter: ArrowPainter(_angle),
+              painter: _imagesLoaded ? ArrowPainter(_angle, _arrowImage!, _centerImage!) : null,
             ),
           ),
         ),
@@ -60,18 +90,15 @@ class _MovingArrowWidgetState extends State<MovingArrowWidget> {
 
 class ArrowPainter extends CustomPainter {
   final double angle;
+  final ui.Image arrowImage;
+  final ui.Image centerImage;
 
-  ArrowPainter(this.angle);
+  ArrowPainter(this.angle, this.arrowImage, this.centerImage);
 
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint paint = Paint()
-      ..color = Colors.red
-      ..style = PaintingStyle.fill;
-
-    final double arrowSize = 20.0;
     final Offset center = Offset(size.width / 2, size.height / 2);
-    final double radius = size.width / 2 - arrowSize;
+    final double radius = size.width / 2 - 20.0;
 
     // Calculate the new angle based on 45 degree steps (45 degrees = pi/4 radians)
     final double adjustedAngle = (angle / (pi / 4)).round() * (pi / 4);
@@ -81,38 +108,22 @@ class ArrowPainter extends CustomPainter {
       center.dy + radius * sin(adjustedAngle),
     );
 
-    // Draw the arrow
-    drawArrow(canvas, paint, arrowPosition, arrowSize, adjustedAngle);
-
     // Draw the center image
-    final centerImage = AssetImage('assets/images/motorcycle.png');
-    centerImage.resolve(ImageConfiguration()).addListener(
-      ImageStreamListener((ImageInfo info, bool _) {
-        final imageSize = Size(info.image.width.toDouble(), info.image.height.toDouble());
-        final Rect src = Offset.zero & imageSize;
-        final Rect dst = Rect.fromCenter(center: center, width: 60, height: 60);
-        canvas.drawImageRect(info.image, src, dst, Paint());
-      }),
-    );
-  }
+    final imageSize = Size(centerImage.width.toDouble(), centerImage.height.toDouble());
+    final Rect src = Offset.zero & imageSize;
+    final Rect dst = Rect.fromCenter(center: center, width: 60, height: 60);
+    canvas.drawImageRect(centerImage, src, dst, Paint());
 
-  void drawArrow(Canvas canvas, Paint paint, Offset position, double size, double angle) {
-    final Path path = Path();
-    path.moveTo(position.dx, position.dy);
-    path.lineTo(position.dx + size, position.dy - size / 2);
-    path.lineTo(position.dx + size / 2, position.dy - size / 2);
-    path.lineTo(position.dx + size / 2, position.dy - size / 2);
-    path.lineTo(position.dx - size / 2, position.dy);
-    path.lineTo(position.dx + size / 2, position.dy + size / 2);
-    path.lineTo(position.dx + size / 2, position.dy + size / 2);
-    path.lineTo(position.dx + size, position.dy + size / 2);
-    path.close();
+    // Draw the arrow image
+    final arrowSize = Size(arrowImage.width.toDouble(), arrowImage.height.toDouble());
+    final Rect arrowSrc = Offset.zero & arrowSize;
+    final Rect arrowDst = Rect.fromCenter(center: arrowPosition, width: 40, height: 40);
 
     canvas.save();
-    canvas.translate(position.dx, position.dy);
-    canvas.rotate(angle); // Rotate the arrow
-    canvas.translate(-position.dx, -position.dy);
-    canvas.drawPath(path, paint);
+    canvas.translate(arrowPosition.dx, arrowPosition.dy);
+    canvas.rotate(adjustedAngle);
+    canvas.translate(-arrowPosition.dx, -arrowPosition.dy);
+    canvas.drawImageRect(arrowImage, arrowSrc, arrowDst, Paint());
     canvas.restore();
   }
 
