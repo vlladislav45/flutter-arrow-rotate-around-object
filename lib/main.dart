@@ -1,6 +1,6 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
@@ -15,27 +15,67 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       home: Scaffold(
         appBar: AppBar(title: Text('Moving Arrow Widget')),
-        body: MovingArrowWidget(),
+        body: MovingArrowWidget(
+          onExport: (a) {
+            print(a);
+          },
+          isFirstParticipant: true,
+        ),
       ),
     );
   }
 }
 
 class MovingArrowWidget extends StatefulWidget {
+  final bool isFirstParticipant;
+  final Function(Uint8List) onExport;
+
+  MovingArrowWidget({required this.onExport, required this.isFirstParticipant});
+
   @override
   _MovingArrowWidgetState createState() => _MovingArrowWidgetState();
 }
 
 class _MovingArrowWidgetState extends State<MovingArrowWidget> {
   double _angle = 0.0;
+  double _adjustedAngle = 0.0; // This variable stores the angle that is rounded to the nearest 45 degrees.
   ui.Image? _arrowImage;
   ui.Image? _centerImage;
   bool _imagesLoaded = false;
+  GlobalKey _repaintKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _loadImages();
+  }
+
+  String getAngleText() {
+    final angleDegrees = (_adjustedAngle * 180 / pi) % 360;
+
+    if (angleDegrees >= 45 && angleDegrees < 90) {
+      return 'Задна дясна част';
+    }
+    if (angleDegrees >= 90 && angleDegrees < 135) {
+      return 'Задна част';
+    }
+    if (angleDegrees >= 135 && angleDegrees < 180) {
+      return 'Задна лява част';
+    }
+    if (angleDegrees >= 180 && angleDegrees < 225) {
+      return 'Лява част';
+    }
+    if (angleDegrees >= 225 && angleDegrees < 270) {
+      return 'Предна лява част';
+    }
+    if (angleDegrees >= 270 && angleDegrees < 315) {
+      return 'Предна част';
+    }
+    if (angleDegrees >= 315 || angleDegrees < 45) {
+      return 'Предна дясна част';
+    }
+
+    return 'Дясна част';
   }
 
   Future<void> _loadImages() async {
@@ -57,9 +97,26 @@ class _MovingArrowWidgetState extends State<MovingArrowWidget> {
 
   void _onPanUpdate(DragUpdateDetails details) {
     setState(() {
-      _angle += details.delta.dx * 0.02; // Adjust the sensitivity of the sliding
+      _angle += details.delta.dx * 0.01; // Adjust the sensitivity of the sliding
       _angle %= 2 * pi; // Keep the angle within 0 to 2*PI
+      _adjustedAngle = (_angle / (pi / 4)).round() * (pi / 4);
     });
+  }
+
+  Future<void> _capturePng() async {
+    try {
+      RenderRepaintBoundary boundary =
+      _repaintKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      ui.Image image = await boundary.toImage();
+      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      Uint8List pngBytes = byteData!.buffer.asUint8List();
+
+      // Call the callback function with the PNG bytes
+      widget.onExport(pngBytes);
+    } catch (e) {
+      print(e);
+      // TODO: REMOVE THE PRINT
+    }
   }
 
   @override
@@ -70,16 +127,22 @@ class _MovingArrowWidgetState extends State<MovingArrowWidget> {
           top: 20,
           left: 20,
           child: Text(
-            'Angle: ${(_angle * 180 / pi).toStringAsFixed(2)}°',
-            style: TextStyle(fontSize: 18),
+            getAngleText() + ' ' + ((_adjustedAngle * 180 / pi) % 360).toStringAsFixed(2),
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
         ),
         GestureDetector(
           onPanUpdate: _onPanUpdate,
+          onPanEnd: (end) => _capturePng(),
           child: Center(
-            child: CustomPaint(
-              size: Size(300, 300),
-              painter: _imagesLoaded ? ArrowPainter(_angle, _arrowImage!, _centerImage!) : null,
+            child: RepaintBoundary(
+              key: _repaintKey,
+              child: CustomPaint(
+                size: const Size(500, 500),
+                painter: _imagesLoaded
+                    ? ArrowPainter(_adjustedAngle, _arrowImage!, _centerImage!)
+                    : null,
+              ),
             ),
           ),
         ),
@@ -100,19 +163,17 @@ class ArrowPainter extends CustomPainter {
     final Offset center = Offset(size.width / 2, size.height / 2);
     final double radius = size.width / 2 - 20.0;
 
-    // Calculate the new angle based on 45 degree steps (45 degrees = pi/4 radians)
-    final double adjustedAngle = (angle / (pi / 4)).round() * (pi / 4);
-
     final Offset arrowPosition = Offset(
-      center.dx + radius * cos(adjustedAngle),
-      center.dy + radius * sin(adjustedAngle),
+      center.dx + radius * cos(angle),
+      center.dy + radius * sin(angle),
     );
 
-    // Draw the center image
-    final imageSize = Size(centerImage.width.toDouble(), centerImage.height.toDouble());
-    final Rect src = Offset.zero & imageSize;
-    final Rect dst = Rect.fromCenter(center: center, width: 60, height: 60);
-    canvas.drawImageRect(centerImage, src, dst, Paint());
+    // Draw the center image to fit the full size
+    final Rect centerImageDst = Rect.fromCenter(
+        center: center, width: size.width / 2.3, height: size.height / 2.3);
+    final Rect centerImageSrc =
+    Offset.zero & Size(centerImage.width.toDouble(), centerImage.height.toDouble());
+    canvas.drawImageRect(centerImage, centerImageSrc, centerImageDst, Paint());
 
     // Draw the arrow image
     final arrowSize = Size(arrowImage.width.toDouble(), arrowImage.height.toDouble());
@@ -121,7 +182,7 @@ class ArrowPainter extends CustomPainter {
 
     canvas.save();
     canvas.translate(arrowPosition.dx, arrowPosition.dy);
-    canvas.rotate(adjustedAngle);
+    canvas.rotate(angle);
     canvas.translate(-arrowPosition.dx, -arrowPosition.dy);
     canvas.drawImageRect(arrowImage, arrowSrc, arrowDst, Paint());
     canvas.restore();
