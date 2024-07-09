@@ -54,28 +54,28 @@ class _MovingArrowWidgetState extends State<MovingArrowWidget> {
     final angleDegrees = (_adjustedAngle * 180 / pi) % 360;
 
     if (angleDegrees >= 45 && angleDegrees < 90) {
-      return 'Задна дясна част';
+      return 'Rear right part';
     }
     if (angleDegrees >= 90 && angleDegrees < 135) {
-      return 'Задна част';
+      return 'Rear part';
     }
     if (angleDegrees >= 135 && angleDegrees < 180) {
-      return 'Задна лява част';
+      return 'Rear left part';
     }
     if (angleDegrees >= 180 && angleDegrees < 225) {
-      return 'Лява част';
+      return 'Left part';
     }
     if (angleDegrees >= 225 && angleDegrees < 270) {
-      return 'Предна лява част';
+      return 'Front left part';
     }
     if (angleDegrees >= 270 && angleDegrees < 315) {
-      return 'Предна част';
+      return 'Front part';
     }
     if (angleDegrees >= 315 || angleDegrees < 45) {
-      return 'Предна дясна част';
+      return 'Front right part';
     }
 
-    return 'Дясна част';
+    return 'Right part';
   }
 
   Future<void> _loadImages() async {
